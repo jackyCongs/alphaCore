@@ -1,0 +1,4 @@
+{
+  "qmt_files_dir": "D:\\PythonProject\\stockQMT\\files\\alphacore_config.json",
+  "mqtt_broker": "tcp://127.0.0.1:1883"
+}

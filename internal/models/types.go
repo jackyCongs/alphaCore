@@ -23,3 +23,8 @@ type IndexResult struct {
 	ChangePct float64 `json:"r"` // 涨跌幅
 	Time      int64   `json:"t"` // 时间戳
 }
+
+type AppConfig struct {
+	QmtFilesDir string `json:"qmt_files_dir"`
+	MqttBroker  string `json:"mqtt_broker"`
+}

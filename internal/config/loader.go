@@ -28,3 +28,17 @@ func LoadIndexConfig(filepath string) (map[string]models.IndexConfig, error) {
 
 	return configMap, nil
 }
+
+func LoadAppConfig(path string) (*models.AppConfig, error) {
+	configFile, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg models.AppConfig
+	if err := json.Unmarshal(configFile, &cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
