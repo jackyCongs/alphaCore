@@ -11,20 +11,26 @@ type Tick struct {
 
 // IndexConfig 对应盘前 Python 生成的指数配置
 type IndexConfig struct {
-	PreClose   float64            `json:"pre_close"`
-	Divisor    float64            `json:"divisor"`
-	Components map[string]float64 `json:"components"`
+	BasketPreClose float64            `json:"basket_pre_close"`
+	EstimatedCash  float64            `json:"estimated_cash"`
+	NetAssetValue  float64            `json:"net_asset_value"`
+	Components     map[string]float64 `json:"components"`
 }
 
 // IndexResult 对应计算完毕后发回 NanoMQ 的实时指数结果
 type IndexResult struct {
-	IndexCode string  `json:"i"` // 指数代码
-	Point     float64 `json:"p"` // 实时点位
-	ChangePct float64 `json:"r"` // 涨跌幅
-	Time      int64   `json:"t"` // 时间戳
+	IndexCode string  `json:"i"`    // ETF代码
+	IOPV      float64 `json:"iopv"` // 实时净值
+	Time      int64   `json:"t"`    // 时间戳
 }
 
 type AppConfig struct {
 	QmtFilesDir string `json:"qmt_files_dir"`
 	MqttBroker  string `json:"mqtt_broker"`
+}
+
+type CalcResult struct {
+	Code string  `json:"i"`    // ETF代码
+	IOPV float64 `json:"iopv"` // 实时净值
+	Time int64   `json:"t"`    // 时间戳
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"log"
 	"runtime"
+	"sort"
 
 	"alphacore/internal/models"
 )
@@ -12,12 +13,15 @@ type Dispatcher struct {
 	ResultChan chan models.IndexResult
 }
 
-// NewDispatcher 根据 i5-14600K 的核心数动态创建无锁协程池
 func NewDispatcher(configMap map[string]models.IndexConfig) *Dispatcher {
-	// 榨干 CPU：默认使用全部逻辑线程
-	numWorkers := runtime.GOMAXPROCS(0)
-	resultChan := make(chan models.IndexResult, 10000)
+	// 1. 限制 Go 最大吃 16 线程，腾出 4 线程给 Python/NanoMQ
+	numWorkers := runtime.NumCPU() - 4
+	if numWorkers < 4 {
+		numWorkers = 4
+	}
+	runtime.GOMAXPROCS(numWorkers)
 
+	resultChan := make(chan models.IndexResult, 10000)
 	dispatcher := &Dispatcher{
 		Workers:    make([]*Worker, numWorkers),
 		ResultChan: resultChan,
@@ -27,23 +31,54 @@ func NewDispatcher(configMap map[string]models.IndexConfig) *Dispatcher {
 		dispatcher.Workers[i] = NewWorker(i, resultChan)
 	}
 
-	// 将全市场指数均匀“分片(Shard)”给各个 Worker
-	i := 0
-	for idxCode, conf := range configMap {
-		worker := dispatcher.Workers[i%numWorkers]
-
-		// 深拷贝配置以防共享内存泄漏
-		confCopy := conf
-		worker.MyIndices[idxCode] = &confCopy
-
-		// 建立快速倒排索引
-		for stockCode := range confCopy.Components {
-			worker.StockToIndices[stockCode] = append(worker.StockToIndices[stockCode], idxCode)
-		}
-		i++
+	// 按成分股总体积（算力消耗）进行贪心分配
+	type IndexItem struct {
+		Code   string
+		Config models.IndexConfig
+		Size   int // 成分股数量
 	}
 
-	log.Printf("🚀 引擎初始化完成: 挂载 %d 个指数，已开启 %d 个无锁并行计算单元！", len(configMap), numWorkers)
+	var indexList []IndexItem
+	for k, v := range configMap {
+		indexList = append(indexList, IndexItem{Code: k, Config: v, Size: len(v.Components)})
+	}
+
+	// 将所有指数按照成分股数量从大到小严格排序
+	sort.Slice(indexList, func(i, j int) bool {
+		return indexList[i].Size > indexList[j].Size
+	})
+
+	// 动态跟踪记录这 16 个 Worker 目前各自承载的【成分股总数】
+	workerLoads := make([]int, numWorkers)
+
+	// 贪心分配：谁的手活最少，就把下一个指数发给谁
+	for _, item := range indexList {
+		minIndex := 0
+		minLoad := workerLoads[0]
+		for wID := 1; wID < numWorkers; wID++ {
+			if workerLoads[wID] < minLoad {
+				minLoad = workerLoads[wID]
+				minIndex = wID
+			}
+		}
+
+		targetWorker := dispatcher.Workers[minIndex]
+		confCopy := item.Config
+		targetWorker.MyIndices[item.Code] = &confCopy
+
+		// 建立倒排索引
+		for stockCode := range confCopy.Components {
+			targetWorker.StockToIndices[stockCode] = append(targetWorker.StockToIndices[stockCode], item.Code)
+		}
+
+		workerLoads[minIndex] += item.Size
+	}
+
+	log.Printf("🚀 [AlphaCore 动态负载均衡点火成功]")
+	for id, load := range workerLoads {
+		log.Printf("   -> 计算单元 Worker_🔥_%02d : 已承载实时成分股乘加压力 [ %d ] 只", id, load)
+	}
+
 	return dispatcher
 }
 
@@ -53,10 +88,8 @@ func (d *Dispatcher) Start() {
 	}
 }
 
-// DispatchTicks 极速广播：将 NanoMQ 收到的批次瞬间投递给所有 Worker
 func (d *Dispatcher) DispatchTicks(batch []models.Tick) {
 	for _, w := range d.Workers {
-		// 非阻塞投递：利用缓冲 Channel
 		select {
 		case w.TickChan <- batch:
 		default:

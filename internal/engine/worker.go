@@ -7,13 +7,13 @@ import (
 // Worker 是一个独立的计算单元，管理分配给自己的那部分指数
 type Worker struct {
 	ID         int
-	TickChan   chan []models.Tick       // 接收实时行情的通道
+	TickChan   chan []models.Tick        // 接收实时行情的通道
 	ResultChan chan<- models.IndexResult // 发送计算结果的通道
 
 	// 内存数据库 (完全无锁)
-	MyIndices     map[string]*models.IndexConfig // 该 worker 负责的指数
-	StockToIndices map[string][]string           // 股票代码 -> 影响的指数列表映射
-	PriceCache    map[string]float64             // 股票最新价缓存
+	MyIndices      map[string]*models.IndexConfig // 该 worker 负责的指数
+	StockToIndices map[string][]string            // 股票代码 -> 影响的指数列表映射
+	PriceCache     map[string]float64             // 股票最新价缓存
 }
 
 func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
@@ -35,6 +35,7 @@ func (w *Worker) Start() {
 
 		// 1. 更新价格，并找出哪些指数受到了影响
 		for _, tick := range batch {
+			print(tick.Code)
 			w.PriceCache[tick.Code] = tick.Price
 			if tick.Time > latestTime {
 				latestTime = tick.Time
@@ -46,7 +47,6 @@ func (w *Worker) Start() {
 				}
 			}
 		}
-
 		// 2. 只重新计算受到影响的指数 (微秒级)
 		for idxCode := range affectedIndices {
 			w.calculateAndPublish(idxCode, latestTime)
@@ -54,31 +54,33 @@ func (w *Worker) Start() {
 	}
 }
 
-func (w *Worker) calculateAndPublish(indexCode string, timestamp int64) {
-	config := w.MyIndices[indexCode]
-	var totalMarketCap float64 = 0.0
+func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
+	config := w.MyIndices[etfCode]
+	var realtimeBasketValue float64 = 0.0
 
-	// 遍历该指数的所有成分股，计算：最新价 * 虚拟股数
-	for stockCode, syntheticShares := range config.Components {
+	// 1. 遍历该 ETF 的所有成分股，计算：最新价 * PCF绝对股数
+	for stockCode, shares := range config.Components {
 		price, exists := w.PriceCache[stockCode]
 		if !exists || price <= 0 {
-			continue // 如果毫无价格记录，暂时跳过（通常开盘快照会补齐）
+			continue
 		}
-		totalMarketCap += price * syntheticShares
+		realtimeBasketValue += price * shares
 	}
 
-	// 套用终极公式计算点位
-	if config.Divisor <= 0 {
-		return
+	// 2. 套用 IOPV 物理守恒公式
+	yesterdayTotalValue := config.BasketPreClose + config.EstimatedCash
+	if yesterdayTotalValue <= 0 {
+		return // 防止除以 0 导致引擎崩溃
 	}
-	realtimePoint := totalMarketCap / config.Divisor
-	changePct := (realtimePoint - config.PreClose) / config.PreClose
 
-	// 将结果推向汇聚通道
+	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash
+	// 实时净值 = 昨日净值 * (实时总价值 / 昨日总价值)
+	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
+
+	// 3. 将结果推向汇聚通道 (仅包含代码、净值、时间戳)
 	w.ResultChan <- models.IndexResult{
-		IndexCode: indexCode,
-		Point:     realtimePoint,
-		ChangePct: changePct,
+		IndexCode: etfCode,
+		IOPV:      realtimeIOPV, // 🟢 替换为净值
 		Time:      timestamp,
 	}
 }
