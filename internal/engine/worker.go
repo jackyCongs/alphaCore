@@ -35,7 +35,6 @@ func (w *Worker) Start() {
 
 		// 1. 更新价格，并找出哪些指数受到了影响
 		for _, tick := range batch {
-			print(tick.Code)
 			w.PriceCache[tick.Code] = tick.Price
 			if tick.Time > latestTime {
 				latestTime = tick.Time
@@ -77,10 +76,16 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	// 实时净值 = 昨日净值 * (实时总价值 / 昨日总价值)
 	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
 
-	// 3. 将结果推向汇聚通道 (仅包含代码、净值、时间戳)
+	var changePct float64 = 0.0
+	if config.NetAssetValue > 0 {
+		changePct = (realtimeIOPV / config.NetAssetValue) - 1.0
+	}
+
+	// 3. 将结果推向汇聚通道
 	w.ResultChan <- models.IndexResult{
 		IndexCode: etfCode,
-		IOPV:      realtimeIOPV, // 🟢 替换为净值
+		IOPV:      realtimeIOPV,
+		Rate:      changePct,
 		Time:      timestamp,
 	}
 }

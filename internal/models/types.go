@@ -17,10 +17,10 @@ type IndexConfig struct {
 	Components     map[string]float64 `json:"components"`
 }
 
-// IndexResult 对应计算完毕后发回 NanoMQ 的实时指数结果
 type IndexResult struct {
 	IndexCode string  `json:"i"`    // ETF代码
 	IOPV      float64 `json:"iopv"` // 实时净值
+	Rate      float64 `json:"r"`    // 涨跌幅（纯小数格式）
 	Time      int64   `json:"t"`    // 时间戳
 }
 
