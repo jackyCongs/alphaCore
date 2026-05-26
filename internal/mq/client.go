@@ -7,6 +7,7 @@ import (
 
 	"alphacore/internal/engine"
 	"alphacore/internal/models"
+	"alphacore/internal/web"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -14,9 +15,10 @@ import (
 type NanoMQClient struct {
 	Client     mqtt.Client
 	Dispatcher *engine.Dispatcher
+	WebServer  *web.Server
 }
 
-func NewNanoMQClient(broker string, dispatcher *engine.Dispatcher) *NanoMQClient {
+func NewNanoMQClient(broker string, dispatcher *engine.Dispatcher, webServer *web.Server) *NanoMQClient {
 	opts := mqtt.NewClientOptions().AddBroker(broker).SetClientID("AlphaCore_Go_Engine")
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetCleanSession(true)
@@ -44,6 +46,7 @@ func NewNanoMQClient(broker string, dispatcher *engine.Dispatcher) *NanoMQClient
 	return &NanoMQClient{
 		Client:     client,
 		Dispatcher: dispatcher,
+		WebServer:  webServer,
 	}
 }
 
@@ -84,6 +87,12 @@ func (m *NanoMQClient) publishBatch(batch *[]models.IndexResult) {
 		// 发布到统一的实时期货主题
 		m.Client.Publish("alphacore/index/realtime", 0, false, payload)
 	}
+	
+	// 推送给 Web 前端
+	if m.WebServer != nil {
+		m.WebServer.PushUpdate(*batch)
+	}
+	
 	// 清空切片复用内存
 	*batch = (*batch)[:0]
 }

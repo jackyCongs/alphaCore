@@ -2,6 +2,7 @@ package engine
 
 import (
 	"alphacore/internal/models"
+	"fmt"
 )
 
 // Worker 是一个独立的计算单元，管理分配给自己的那部分指数
@@ -60,19 +61,21 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	// 1. 遍历该 ETF 的所有成分股，计算：最新价 * PCF绝对股数
 	for stockCode, shares := range config.Components {
 		price, exists := w.PriceCache[stockCode]
-		if !exists || price <= 0 {
-			continue
+		if !exists {
+			// fmt.Println(fmt.Sprintf("[缺失Tick] %s 从未收到数据！", stockCode))
+		} else if price <= 0.01 {
+			fmt.Println(fmt.Sprintf("[零价异常] %s 收到了Tick，但价格极低: %f", stockCode, price))
 		}
 		realtimeBasketValue += price * shares
 	}
 
 	// 2. 套用 IOPV 物理守恒公式
-	yesterdayTotalValue := config.BasketPreClose + config.EstimatedCash
+	yesterdayTotalValue := config.OriginBasketAmount
 	if yesterdayTotalValue <= 0 {
 		return // 防止除以 0 导致引擎崩溃
 	}
 
-	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash
+	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash + config.HiddenSubstituteAmount
 	// 实时净值 = 昨日净值 * (实时总价值 / 昨日总价值)
 	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
 

@@ -9,6 +9,7 @@ import (
 	"alphacore/internal/config"
 	"alphacore/internal/engine"
 	"alphacore/internal/mq"
+	"alphacore/internal/web"
 )
 
 func main() {
@@ -31,8 +32,17 @@ func main() {
 	dispatcher := engine.NewDispatcher(configMap)
 	dispatcher.Start()
 
+	// 3.5 启动 Web 实时仪表盘
+	stateManager := web.NewStateManager()
+	webServer := web.NewServer(stateManager)
+	go func() {
+		if err := webServer.Run(":8080"); err != nil {
+			log.Fatalf("❌ Web 服务异常: %v", err)
+		}
+	}()
+
 	// 4. 连接 NanoMQ 并启动收发总线
-	mqClient := mq.NewNanoMQClient(appCfg.MqttBroker, dispatcher)
+	mqClient := mq.NewNanoMQClient(appCfg.MqttBroker, dispatcher, webServer)
 	mqClient.StartResultPublisher()
 	mqClient.Subscribe()
 
