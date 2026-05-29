@@ -22,12 +22,12 @@ type Worker struct {
 
 func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
 	return &Worker{
-		ID:                id,
-		TickChan:          make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
-		ResultChan:        resultChan,
-		MyIndices:         make(map[string]*models.IndexConfig),
-		StockToIndices:    make(map[string][]string),
-		PriceCache:        make(map[string]float64),
+		ID:                 id,
+		TickChan:           make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
+		ResultChan:         resultChan,
+		MyIndices:          make(map[string]*models.IndexConfig),
+		StockToIndices:     make(map[string][]string),
+		PriceCache:         make(map[string]float64),
 		CalibrationOffsets: make(map[string]float64),
 	}
 }
@@ -38,7 +38,6 @@ func (w *Worker) Start() {
 		affectedIndices := make(map[string]bool)
 		var latestTime int64
 
-		// 1. 更新价格，并找出哪些指数受到了影响
 		for _, tick := range batch {
 			w.PriceCache[tick.Code] = tick.Price
 			if tick.Time > latestTime {
@@ -51,7 +50,6 @@ func (w *Worker) Start() {
 				}
 			}
 		}
-		// 2. 只重新计算受到影响的指数 (微秒级)
 		for idxCode := range affectedIndices {
 			w.calculateAndPublish(idxCode, latestTime)
 		}
@@ -62,7 +60,6 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	config := w.MyIndices[etfCode]
 	var realtimeBasketValue float64 = 0.0
 
-	// 1. 遍历该 ETF 的所有成分股，计算：最新价 * PCF绝对股数
 	for stockCode, shares := range config.Components {
 		price, exists := w.PriceCache[stockCode]
 		if !exists {
@@ -73,19 +70,15 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 		realtimeBasketValue += price * shares
 	}
 
-	// 2. 套用 IOPV 物理守恒公式
 	yesterdayTotalValue := config.OriginBasketAmount
 	if yesterdayTotalValue <= 0 {
-		return // 防止除以 0 导致引擎崩溃
+		return
 	}
 
 	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash + config.HiddenSubstituteAmount
-	// 实时净值 = 昨日净值 * (实时总价值 / 昨日总价值)
 	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
 
-	// 3. 叠加盘前校准偏移量（静态常量，全天不变）
-	// 原理：offset = 官方IOPV - 我方IOPV（9:25时刻的静态缺口）
-	// 盘中：校准后IOPV = 我方实时IOPV + offset
+	// 叠加盘前校准偏移量（纯静态常量）
 	if offset, ok := w.CalibrationOffsets[etfCode]; ok {
 		realtimeIOPV += offset
 	}
@@ -95,7 +88,6 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 		changePct = (realtimeIOPV / config.NetAssetValue) - 1.0
 	}
 
-	// 3. 将结果推向汇聚通道
 	w.ResultChan <- models.IndexResult{
 		IndexCode: etfCode,
 		IOPV:      realtimeIOPV,

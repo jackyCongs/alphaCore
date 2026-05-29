@@ -15,7 +15,6 @@ type Dispatcher struct {
 }
 
 func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibration.Offsets) *Dispatcher {
-	// 1. 限制 Go 最大吃 16 线程，腾出 4 线程给 Python/NanoMQ
 	numWorkers := runtime.NumCPU() - 4
 	if numWorkers < 4 {
 		numWorkers = 4
@@ -32,7 +31,6 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibrat
 		dispatcher.Workers[i] = NewWorker(i, resultChan)
 	}
 
-	// 按成分股总体积（算力消耗）进行贪心分配
 	type IndexItem struct {
 		Code   string
 		Config models.IndexConfig
@@ -44,15 +42,12 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibrat
 		indexList = append(indexList, IndexItem{Code: k, Config: v, Size: len(v.Components)})
 	}
 
-	// 将所有指数按照成分股数量从大到小严格排序
 	sort.Slice(indexList, func(i, j int) bool {
 		return indexList[i].Size > indexList[j].Size
 	})
 
-	// 动态跟踪记录这 16 个 Worker 目前各自承载的【成分股总数】
 	workerLoads := make([]int, numWorkers)
 
-	// 贪心分配：谁的手活最少，就把下一个指数发给谁
 	for _, item := range indexList {
 		minIndex := 0
 		minLoad := workerLoads[0]
@@ -67,12 +62,10 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibrat
 		confCopy := item.Config
 		targetWorker.MyIndices[item.Code] = &confCopy
 
-		// 建立倒排索引
 		for stockCode := range confCopy.Components {
 			targetWorker.StockToIndices[stockCode] = append(targetWorker.StockToIndices[stockCode], item.Code)
 		}
 
-		// 将该 ETF 的校准偏移量注入到同一个 Worker（跟随计算单元，无需跨线程）
 		if calOffsets != nil {
 			if offset := calOffsets.GetOffset(item.Code); offset != 0 {
 				targetWorker.CalibrationOffsets[item.Code] = offset

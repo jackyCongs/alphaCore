@@ -31,7 +31,7 @@ func main() {
 
 	// 2.5 加载盘前校准偏移量（如果当天有校准文件）
 	// 文件名固定格式: files/etf_YYYYMMDD_morning_diff.txt
-	// 不存在 = 不需要校准，引擎以原始精度运行
+	// 增加了 0.15% 的异常过滤阈值，避免错误校准 QDII 等 ETF
 	calOffsets := calibration.LoadMorningDiff("./files")
 
 	// 3. 创建无锁并发调度引擎（携带校准参数）
