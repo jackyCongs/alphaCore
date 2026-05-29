@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sort"
 
+	"alphacore/internal/calibration"
 	"alphacore/internal/models"
 )
 
@@ -13,7 +14,7 @@ type Dispatcher struct {
 	ResultChan chan models.IndexResult
 }
 
-func NewDispatcher(configMap map[string]models.IndexConfig) *Dispatcher {
+func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibration.Offsets) *Dispatcher {
 	// 1. 限制 Go 最大吃 16 线程，腾出 4 线程给 Python/NanoMQ
 	numWorkers := runtime.NumCPU() - 4
 	if numWorkers < 4 {
@@ -69,6 +70,13 @@ func NewDispatcher(configMap map[string]models.IndexConfig) *Dispatcher {
 		// 建立倒排索引
 		for stockCode := range confCopy.Components {
 			targetWorker.StockToIndices[stockCode] = append(targetWorker.StockToIndices[stockCode], item.Code)
+		}
+
+		// 将该 ETF 的校准偏移量注入到同一个 Worker（跟随计算单元，无需跨线程）
+		if calOffsets != nil {
+			if offset := calOffsets.GetOffset(item.Code); offset != 0 {
+				targetWorker.CalibrationOffsets[item.Code] = offset
+			}
 		}
 
 		workerLoads[minIndex] += item.Size

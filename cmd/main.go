@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"alphacore/internal/calibration"
 	"alphacore/internal/config"
 	"alphacore/internal/engine"
 	"alphacore/internal/mq"
@@ -28,8 +29,13 @@ func main() {
 		log.Fatalf("❌ 初始化核心数据失败: %v", err)
 	}
 
-	// 3. 创建无锁并发调度引擎
-	dispatcher := engine.NewDispatcher(configMap)
+	// 2.5 加载盘前校准偏移量（如果当天有校准文件）
+	// 文件名固定格式: files/etf_YYYYMMDD_morning_diff.txt
+	// 不存在 = 不需要校准，引擎以原始精度运行
+	calOffsets := calibration.LoadMorningDiff("./files")
+
+	// 3. 创建无锁并发调度引擎（携带校准参数）
+	dispatcher := engine.NewDispatcher(configMap, calOffsets)
 	dispatcher.Start()
 
 	// 3.5 启动 Web 实时仪表盘
@@ -56,3 +62,4 @@ func main() {
 	log.Println("🛑 接收到退出信号，关闭引擎...")
 	mqClient.Client.Disconnect(250)
 }
+

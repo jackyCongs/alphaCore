@@ -2,7 +2,6 @@ package engine
 
 import (
 	"alphacore/internal/models"
-	"fmt"
 )
 
 // Worker 是一个独立的计算单元，管理分配给自己的那部分指数
@@ -15,16 +14,21 @@ type Worker struct {
 	MyIndices      map[string]*models.IndexConfig // 该 worker 负责的指数
 	StockToIndices map[string][]string            // 股票代码 -> 影响的指数列表映射
 	PriceCache     map[string]float64             // 股票最新价缓存
+
+	// 盘前校准偏移量 (ETF代码 -> IOPV静态偏移)
+	// 9:25 定好后全天不变，弥补现金/替代物等系统性差异
+	CalibrationOffsets map[string]float64
 }
 
 func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
 	return &Worker{
-		ID:             id,
-		TickChan:       make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
-		ResultChan:     resultChan,
-		MyIndices:      make(map[string]*models.IndexConfig),
-		StockToIndices: make(map[string][]string),
-		PriceCache:     make(map[string]float64),
+		ID:                id,
+		TickChan:          make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
+		ResultChan:        resultChan,
+		MyIndices:         make(map[string]*models.IndexConfig),
+		StockToIndices:    make(map[string][]string),
+		PriceCache:        make(map[string]float64),
+		CalibrationOffsets: make(map[string]float64),
 	}
 }
 
@@ -64,7 +68,7 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 		if !exists {
 			// fmt.Println(fmt.Sprintf("[缺失Tick] %s 从未收到数据！", stockCode))
 		} else if price <= 0.01 {
-			fmt.Println(fmt.Sprintf("[零价异常] %s 收到了Tick，但价格极低: %f", stockCode, price))
+			// fmt.Println(fmt.Sprintf("[零价异常] %s 收到了Tick，但价格极低: %f", stockCode, price))
 		}
 		realtimeBasketValue += price * shares
 	}
@@ -78,6 +82,13 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash + config.HiddenSubstituteAmount
 	// 实时净值 = 昨日净值 * (实时总价值 / 昨日总价值)
 	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
+
+	// 3. 叠加盘前校准偏移量（静态常量，全天不变）
+	// 原理：offset = 官方IOPV - 我方IOPV（9:25时刻的静态缺口）
+	// 盘中：校准后IOPV = 我方实时IOPV + offset
+	if offset, ok := w.CalibrationOffsets[etfCode]; ok {
+		realtimeIOPV += offset
+	}
 
 	var changePct float64 = 0.0
 	if config.NetAssetValue > 0 {
