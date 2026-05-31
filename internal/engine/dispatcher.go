@@ -14,7 +14,7 @@ type Dispatcher struct {
 	ResultChan chan models.IndexResult
 }
 
-func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibration.Offsets) *Dispatcher {
+func NewDispatcher(configMap map[string]models.IndexConfig, calFactors *calibration.Factors) *Dispatcher {
 	numWorkers := runtime.NumCPU() - 4
 	if numWorkers < 4 {
 		numWorkers = 4
@@ -66,9 +66,9 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calOffsets *calibrat
 			targetWorker.StockToIndices[stockCode] = append(targetWorker.StockToIndices[stockCode], item.Code)
 		}
 
-		if calOffsets != nil {
-			if offset := calOffsets.GetOffset(item.Code); offset != 0 {
-				targetWorker.CalibrationOffsets[item.Code] = offset
+		if calFactors != nil {
+			if ratio := calFactors.GetRatio(item.Code); ratio != 1.0 && ratio > 0 {
+				targetWorker.CalibrationRatios[item.Code] = ratio
 			}
 		}
 

@@ -70,19 +70,21 @@ func (s *Server) broadcastLoop() {
 
 	for range ticker.C {
 		s.mu.Lock()
-		if len(s.clients) == 0 {
-			s.mu.Unlock()
+		clientCount := len(s.clients)
+		s.mu.Unlock()
+
+		if clientCount == 0 {
 			continue
 		}
 
 		snapshot := s.stateManager.GetAllSorted()
 		data, err := json.Marshal(snapshot)
 		if err != nil {
-			s.mu.Unlock()
 			continue
 		}
 		msg := string(data)
 
+		s.mu.Lock()
 		for ch := range s.clients {
 			select {
 			case ch <- msg:

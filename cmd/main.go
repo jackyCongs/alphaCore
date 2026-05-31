@@ -29,13 +29,13 @@ func main() {
 		log.Fatalf("❌ 初始化核心数据失败: %v", err)
 	}
 
-	// 2.5 加载盘前校准偏移量（如果当天有校准文件）
+	// 2.5 加载盘前校准比例系数（如果当天有校准文件）
 	// 文件名固定格式: files/etf_YYYYMMDD_morning_diff.txt
-	// 增加了 0.15% 的异常过滤阈值，避免错误校准 QDII 等 ETF
-	calOffsets := calibration.LoadMorningDiff("./files")
+	// 使用比例缩放进行全局校准
+	calFactors := calibration.LoadMorningDiff("./files")
 
 	// 3. 创建无锁并发调度引擎（携带校准参数）
-	dispatcher := engine.NewDispatcher(configMap, calOffsets)
+	dispatcher := engine.NewDispatcher(configMap, calFactors)
 	dispatcher.Start()
 
 	// 3.5 启动 Web 实时仪表盘

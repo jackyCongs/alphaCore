@@ -15,8 +15,8 @@ type IndexConfig struct {
 	EstimatedCash          float64            `json:"estimated_cash"`
 	NetAssetValue          float64            `json:"net_asset_value"`
 	OriginBasketAmount     float64            `json:"origin_basket_amount"`
-	HiddenSubstituteAmount float64            `json:"hidden_substitute_amount"`
-	Components             map[string]float64 `json:"components"`
+	HiddenSubstituteAmount float64          `json:"hidden_substitute_amount"`
+	Components             map[string]int64 `json:"components"`
 }
 
 type IndexResult struct {

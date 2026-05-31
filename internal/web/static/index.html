@@ -46,9 +46,7 @@
         h1 {
             font-weight: 800;
             font-size: 1.8rem;
-            background: linear-gradient(to right, #60a5fa, #34d399);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #60a5fa;
             letter-spacing: -0.5px;
         }
 
@@ -94,7 +92,6 @@
 
         tbody tr {
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            transition: background-color 0.3s ease;
         }
 
         tbody tr:hover {
@@ -117,18 +114,6 @@
         .down { color: var(--down-color); }
         .flat { color: var(--text-secondary); }
 
-        /* Flash animation using CSS animation (no JS reflow!) */
-        @keyframes flash-up {
-            0% { background-color: var(--up-bg); }
-            100% { background-color: transparent; }
-        }
-        @keyframes flash-down {
-            0% { background-color: var(--down-bg); }
-            100% { background-color: transparent; }
-        }
-        tr.flash-up { animation: flash-up 0.6s ease-out; }
-        tr.flash-down { animation: flash-down 0.6s ease-out; }
-
         /* Status Indicator */
         .status {
             position: absolute;
@@ -146,14 +131,6 @@
             height: 8px;
             background-color: var(--live-color);
             border-radius: 50%;
-            box-shadow: 0 0 10px var(--live-color);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
         /* Stats Bar */
@@ -336,16 +313,6 @@
                 const isUp = item.r >= 0;
                 const sign = isUp ? '+' : '';
                 const newIopvStr = formatPrice(item.iopv);
-
-                // Flash only if value actually changed
-                if (entry.lastIopvStr !== '--' && entry.lastIopvStr !== newIopvStr) {
-                    const row = entry.row;
-                    // Remove old animation class, re-add to retrigger (no reflow hack needed)
-                    row.classList.remove('flash-up', 'flash-down');
-                    // Use a microtask to ensure the class removal is processed before re-adding
-                    row.offsetHeight; // Single read, not per-card since we batch
-                    row.classList.add(isUp ? 'flash-up' : 'flash-down');
-                }
 
                 entry.iopvCell.textContent = newIopvStr;
                 entry.rateCell.textContent = sign + formatRate(item.r);
