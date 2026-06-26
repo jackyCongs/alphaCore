@@ -23,26 +23,26 @@ func NewNanoMQClient(broker string, dispatcher *engine.Dispatcher, webServer *we
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetCleanSession(true)
 
-	// 设置全局消息到达的回调函数
+	// Set up the default message handler for incoming publications
 	opts.SetDefaultPublishHandler(func(client mqtt.Client, msg mqtt.Message) {
 		if msg.Topic() == "alphacore/tick/batch" {
 			var tickBatch []models.Tick
-			// 极速解码 JSON
+			// High-performance JSON decoding
 			if err := json.Unmarshal(msg.Payload(), &tickBatch); err != nil {
-				log.Printf("❌ 解析 Tick 数据失败: %v", err)
+				log.Printf("❌ Failed to decode tick batch: %v", err)
 				return
 			}
-			// 投递给计算引擎
+			// Dispatch to calculation engine
 			dispatcher.DispatchTicks(tickBatch)
 		}
 	})
 
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatalf("❌ 连接 NanoMQ 失败: %v", token.Error())
+		log.Fatalf("❌ Failed to connect to NanoMQ: %v", token.Error())
 	}
 
-	log.Printf("✅ 成功连接到 NanoMQ: %s", broker)
+	log.Printf("✅ Connected to NanoMQ: %s", broker)
 	return &NanoMQClient{
 		Client:     client,
 		Dispatcher: dispatcher,
@@ -53,15 +53,15 @@ func NewNanoMQClient(broker string, dispatcher *engine.Dispatcher, webServer *we
 func (m *NanoMQClient) Subscribe() {
 	topic := "alphacore/tick/batch"
 	if token := m.Client.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-		log.Fatalf("❌ 订阅主题 %s 失败: %v", topic, token.Error())
+		log.Fatalf("❌ Failed to subscribe to topic %s: %v", topic, token.Error())
 	}
-	log.Printf("📡 成功订阅 Tick 洪流: %s", topic)
+	log.Printf("📡 Subscribed to tick feed topic: %s", topic)
 }
 
-// StartResultPublisher 开启独立协程，将算好的指数结果打包发回 NanoMQ
+// StartResultPublisher launches a dedicated routine to batch-publish results back to NanoMQ
 func (m *NanoMQClient) StartResultPublisher() {
 	go func() {
-		// 为了压榨 I/O，我们攒够一定数量或者每隔 50ms 批量发一次
+		// To optimize I/O, we batch publications every 50ms or when the buffer reaches 100 items
 		var batch []models.IndexResult
 		ticker := time.NewTicker(50 * time.Millisecond)
 
@@ -84,15 +84,15 @@ func (m *NanoMQClient) StartResultPublisher() {
 func (m *NanoMQClient) publishBatch(batch *[]models.IndexResult) {
 	payload, err := json.Marshal(*batch)
 	if err == nil {
-		// 发布到统一的实时期货主题
+		// Publish to the real-time index topic
 		m.Client.Publish("alphacore/index/realtime", 0, false, payload)
 	}
 	
-	// 推送给 Web 前端
+	// Push update to the web server
 	if m.WebServer != nil {
 		m.WebServer.PushUpdate(*batch)
 	}
 	
-	// 清空切片复用内存
+	// Clear slice while retaining capacity for memory reuse
 	*batch = (*batch)[:0]
 }

@@ -6,27 +6,27 @@ import (
 	"alphacore/internal/models"
 )
 
-// Worker 是一个独立的计算单元，管理分配给自己的那部分指数
+// Worker is an independent calculation unit that manages its assigned subset of ETFs
 type Worker struct {
 	ID         int
-	TickChan   chan []models.Tick        // 接收实时行情的通道
-	ResultChan chan<- models.IndexResult // 发送计算结果的通道
+	TickChan   chan []models.Tick        // Channel for receiving real-time ticks
+	ResultChan chan<- models.IndexResult // Channel for publishing computed results
 
-	// 内存数据库 (完全无锁)
-	MyIndices           map[string]*models.IndexConfig // 该 worker 负责的指数
-	StockToIndices      map[string][]string            // 股票代码 -> 影响的指数列表映射
-	PriceCache          map[string]int64               // 股票最新价缓存 (放大1000倍)
-	CurrentBasketValues map[string]int64               // 实时篮子增量价值 (放大1000倍)
+	// In-memory database (completely lock-free)
+	MyIndices           map[string]*models.IndexConfig // ETFs assigned to this worker
+	StockToIndices      map[string][]string            // Stock code -> List of affected ETFs mapping
+	PriceCache          map[string]int64               // Latest stock price cache (scaled by 1000)
+	CurrentBasketValues map[string]int64               // Real-time incremental basket value (scaled by 1000)
 
-	// 盘前校准比例系数 (ETF代码 -> IOPV缩放比例)
-	// 这个值等于 (早上官方IOPV / 早上我方IOPV)
+	// Pre-market calibration factors (ETF code -> IOPV scaling ratio)
+	// This ratio equals (morning official IOPV / morning calculated IOPV)
 	CalibrationRatios map[string]float64
 }
 
 func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
 	return &Worker{
 		ID:                id,
-		TickChan:          make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
+		TickChan:          make(chan []models.Tick, 1024), // Buffered channel to prevent blocking
 		ResultChan:        resultChan,
 		MyIndices:         make(map[string]*models.IndexConfig),
 		StockToIndices:      make(map[string][]string),
@@ -36,7 +36,7 @@ func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
 	}
 }
 
-// Start 启动 Worker 的生命周期，绑定在固定的 goroutine 中运行
+// Start initiates the worker's lifecycle, pinned to a dedicated goroutine
 func (w *Worker) Start() {
 	for batch := range w.TickChan {
 		affectedIndices := make(map[string]bool)
@@ -78,8 +78,8 @@ func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	realtimeTotalValue := realtimeBasketValue + config.EstimatedCash + config.HiddenSubstituteAmount
 	realtimeIOPV := config.NetAssetValue * (realtimeTotalValue / yesterdayTotalValue)
 
-	// 套用盘前校准比例（固定值加权）
-	// 即：实时净值 = 原始计算净值 * (早上官方 / 早上我方)
+	// Apply pre-market calibration scaling
+	// i.e., Real-time IOPV = Raw Calculated IOPV * Calibration Ratio
 	if ratio, ok := w.CalibrationRatios[etfCode]; ok && ratio > 0 {
 		realtimeIOPV *= ratio
 	}
