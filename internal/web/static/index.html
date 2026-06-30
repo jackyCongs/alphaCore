@@ -13,9 +13,9 @@
             --text-primary: #e2e8f0;
             --text-secondary: #94a3b8;
             --accent: #3b82f6;
-            --up-color: #ef4444; /* 红涨 */
+            --up-color: #ef4444; /* Up (Red) */
             --up-bg: rgba(239, 68, 68, 0.15);
-            --down-color: #10b981; /* 绿跌 */
+            --down-color: #10b981; /* Down (Green) */
             --down-bg: rgba(16, 185, 129, 0.15);
             --live-color: #10b981;
         }
@@ -185,19 +185,19 @@
                 <div class="stat-value" id="statTotal">0</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">上涨 📈</div>
+                <div class="stat-label">Up 📈</div>
                 <div class="stat-value up" id="statUp">0</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">平盘 ➖</div>
+                <div class="stat-label">Flat ➖</div>
                 <div class="stat-value flat" id="statFlat">0</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">下跌 📉</div>
+                <div class="stat-label">Down 📉</div>
                 <div class="stat-value down" id="statDown">0</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">平均涨跌幅</div>
+                <div class="stat-label">Avg Return</div>
                 <div class="stat-value" id="statAvg">0.00%</div>
             </div>
         </div>
@@ -207,9 +207,9 @@
                 <thead>
                     <tr>
                         <th class="col-code">ETF Code</th>
-                        <th class="col-iopv">实时净值</th>
-                        <th class="col-rate">涨跌幅</th>
-                        <th class="col-time">更新时间</th>
+                        <th class="col-iopv">Real-Time IOPV</th>
+                        <th class="col-rate">Change</th>
+                        <th class="col-time">Last Update</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">

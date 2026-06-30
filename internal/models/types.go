@@ -1,6 +1,6 @@
 package models
 
-// Tick 对应 Python 发过来的微型盘口数据
+// Tick represents the lightweight market tick data sent from the ingestion pipeline
 type Tick struct {
 	Code  string  `json:"c"`
 	Price float64 `json:"p"`
@@ -9,7 +9,7 @@ type Tick struct {
 	Time  int64   `json:"t"`
 }
 
-// IndexConfig 对应盘前 Python 生成的指数配置
+// IndexConfig represents the pre-market ETF index configuration
 type IndexConfig struct {
 	BasketPreClose         float64            `json:"basket_pre_close"`
 	EstimatedCash          float64            `json:"estimated_cash"`
@@ -20,10 +20,10 @@ type IndexConfig struct {
 }
 
 type IndexResult struct {
-	IndexCode string  `json:"i"`    // ETF代码
-	IOPV      float64 `json:"iopv"` // 实时净值
-	Rate      float64 `json:"r"`    // 涨跌幅（纯小数格式）
-	Time      int64   `json:"t"`    // 时间戳
+	IndexCode string  `json:"i"`    // ETF Code
+	IOPV      float64 `json:"iopv"` // Real-time IOPV
+	Rate      float64 `json:"r"`    // Percentage change (decimal format)
+	Time      int64   `json:"t"`    // Timestamp
 }
 
 type AppConfig struct {
@@ -32,7 +32,7 @@ type AppConfig struct {
 }
 
 type CalcResult struct {
-	Code string  `json:"i"`    // ETF代码
-	IOPV float64 `json:"iopv"` // 实时净值
-	Time int64   `json:"t"`    // 时间戳
+	Code string  `json:"i"`    // ETF Code
+	IOPV float64 `json:"iopv"` // Real-time IOPV
+	Time int64   `json:"t"`    // Timestamp
 }

@@ -14,52 +14,52 @@ import (
 )
 
 func main() {
-	log.Println("=== [AlphaCore] 极速核心计算引擎启动 ===")
+	log.Println("=== [AlphaCore] High-Performance Calculation Engine Starting ===")
 
 	// 1. A clean, single-line call to load the core settings
 	appCfg, err := config.LoadAppConfig("./config.json")
 	if err != nil {
-		log.Fatalf("❌ 配置文件加载失败: %v", err)
+		log.Fatalf("❌ Failed to load configuration file: %v", err)
 	}
-	log.Printf("📂 成功加载配置。数据目录: %s, 消息队列: %s", appCfg.QmtFilesDir, appCfg.MqttBroker)
+	log.Printf("📂 Configuration loaded successfully. Data path: %s, Message broker: %s", appCfg.QmtFilesDir, appCfg.MqttBroker)
 
-	// 2. 读取 Python 准备好的 JSON 弹药库
+	// 2. Load the ETF configurations prepared by the ingestion pipeline
 	configMap, err := config.LoadIndexConfig(appCfg.QmtFilesDir)
 	if err != nil {
-		log.Fatalf("❌ 初始化核心数据失败: %v", err)
+		log.Fatalf("❌ Failed to initialize core ETF configuration: %v", err)
 	}
 
-	// 2.5 加载盘前校准比例系数（如果当天有校准文件）
-	// 文件名固定格式: files/etf_YYYYMMDD_morning_diff.txt
-	// 使用比例缩放进行全局校准
+	// 2.5 Load pre-market morning calibration factors (if today's file exists)
+	// Expected format: files/etf_YYYYMMDD_morning_diff.txt
+	// Apply scaling factors for global calibration
 	calFactors := calibration.LoadMorningDiff("./files")
 
-	// 3. 创建无锁并发调度引擎（携带校准参数）
+	// 3. Initialize the lock-free concurrent execution engine with calibration factors
 	dispatcher := engine.NewDispatcher(configMap, calFactors)
 	dispatcher.Start()
 
-	// 3.5 启动 Web 实时仪表盘
+	// 3.5 Launch the real-time web dashboard
 	stateManager := web.NewStateManager()
 	webServer := web.NewServer(stateManager)
 	go func() {
 		if err := webServer.Run(":8080"); err != nil {
-			log.Fatalf("❌ Web 服务异常: %v", err)
+			log.Fatalf("❌ Web server error: %v", err)
 		}
 	}()
 
-	// 4. 连接 NanoMQ 并启动收发总线
+	// 4. Connect to NanoMQ and start the pub/sub message bus
 	mqClient := mq.NewNanoMQClient(appCfg.MqttBroker, dispatcher, webServer)
 	mqClient.StartResultPublisher()
 	mqClient.Subscribe()
 
-	log.Println("🟢 引擎全面升空！等待开盘数据流注入...")
+	log.Println("🟢 Engine successfully initialized. Waiting for real-time tick stream...")
 
-	// 5. 优雅等待关闭信号
+	// 5. Wait for termination signals gracefully
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("🛑 接收到退出信号，关闭引擎...")
+	log.Println("🛑 Shutdown signal received. Terminating engine...")
 	mqClient.Client.Disconnect(250)
 }
 

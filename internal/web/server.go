@@ -131,6 +131,6 @@ func (s *Server) streamHandler(c *gin.Context) {
 }
 
 func (s *Server) Run(addr string) error {
-	log.Printf("🌐 Web 仪表盘启动: http://localhost%s", addr)
+	log.Printf("🌐 Web dashboard server started at: http://localhost%s", addr)
 	return s.router.Run(addr)
 }

@@ -11,14 +11,14 @@ import (
 	"time"
 )
 
-// Factors 存储每个 ETF 的静态校准比例 (Official IOPV / File IOPV)
+// Factors stores the static calibration ratio for each ETF (Official IOPV / File IOPV)
 type Factors struct {
-	Ratios   map[string]float64 // ETF代码 -> 乘数比例
-	Loaded   bool               // 是否成功加载了校准文件
-	FileUsed string             // 实际使用的文件路径（用于日志）
+	Ratios   map[string]float64 // ETF Code -> Scaling Ratio
+	Loaded   bool               // Whether the calibration file was loaded successfully
+	FileUsed string             // The file path used (for logging)
 }
 
-// LoadMorningDiff 读取盘前差异文件，解析出每个 ETF 的比例系数
+// LoadMorningDiff reads the pre-market morning difference file and extracts the calibration ratio for each ETF
 func LoadMorningDiff(filesDir string) *Factors {
 	factors := &Factors{
 		Ratios: make(map[string]float64),
@@ -32,9 +32,9 @@ func LoadMorningDiff(filesDir string) *Factors {
 	file, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("📋 [比例校准] 今日无校准文件 (%s)，以原始精度运行", filename)
+			log.Printf("📋 [Calibration] No calibration file for today (%s). Running with raw precision.", filename)
 		} else {
-			log.Printf("⚠️ [比例校准] 读取校准文件失败: %v，以原始精度运行", err)
+			log.Printf("⚠️ [Calibration] Failed to read calibration file: %v. Running with raw precision.", err)
 		}
 		return factors
 	}
@@ -52,7 +52,7 @@ func LoadMorningDiff(filesDir string) *Factors {
 			continue
 		}
 
-		// 解析数据行: ETF_ID  File_IOPV  Official_IOPV  Abs_Diff  Pct_Diff
+		// Parse data row: ETF_ID  File_IOPV  Official_IOPV  Abs_Diff  Pct_Diff
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
 			continue
@@ -70,20 +70,20 @@ func LoadMorningDiff(filesDir string) *Factors {
 			continue
 		}
 
-		// 按用户最新要求：使用比例作为固定值加权
+		// Apply ratio scaling based on morning deviation
 		ratio := officialIOPV / fileIOPV
 		factors.Ratios[etfCode] = ratio
 		parsed++
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("⚠️ [比例校准] 文件读取过程中出错: %v", err)
+		log.Printf("⚠️ [Calibration] Error reading file: %v", err)
 		return factors
 	}
 
 	factors.Loaded = true
 	factors.FileUsed = fullPath
-	log.Printf("✅ [比例校准] 成功加载 %d 个 ETF 的盘前校准比例", parsed)
+	log.Printf("✅ [Calibration] Successfully loaded pre-market calibration ratios for %d ETFs", parsed)
 
 	printTopRatios(factors)
 	return factors
@@ -96,7 +96,7 @@ func (f *Factors) GetRatio(etfCode string) float64 {
 	if ratio, exists := f.Ratios[etfCode]; exists {
 		return ratio
 	}
-	return 1.0 // 默认不进行缩放
+	return 1.0 // Default to no scaling
 }
 
 func printTopRatios(factors *Factors) {
@@ -107,7 +107,7 @@ func printTopRatios(factors *Factors) {
 	type entry struct {
 		code  string
 		ratio float64
-		diff  float64 // 偏离 1.0 的程度
+		diff  float64 // Deviation from 1.0
 	}
 
 	var list []entry
@@ -119,7 +119,7 @@ func printTopRatios(factors *Factors) {
 		list = append(list, entry{code: code, ratio: ratio, diff: diff})
 	}
 
-	// 找出偏离 1.0 最多的 5 个
+	// Find the top 5 largest deviations from 1.0
 	for i := 0; i < len(list) && i < 5; i++ {
 		for j := i + 1; j < len(list); j++ {
 			if list[j].diff > list[i].diff {
@@ -133,8 +133,8 @@ func printTopRatios(factors *Factors) {
 		top = len(list)
 	}
 
-	log.Println("📊 [比例校准] 乘数偏离最大 TOP-5：")
+	log.Println("📊 [Calibration] Top 5 largest scaling factor deviations:")
 	for i := 0; i < top; i++ {
-		log.Printf("   -> %s : 比例系数 %.6f", list[i].code, list[i].ratio)
+		log.Printf("   -> %s : Scaling Factor %.6f", list[i].code, list[i].ratio)
 	}
 }

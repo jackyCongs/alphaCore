@@ -34,7 +34,7 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calFactors *calibrat
 	type IndexItem struct {
 		Code   string
 		Config models.IndexConfig
-		Size   int // 成分股数量
+		Size   int // Number of components
 	}
 
 	var indexList []IndexItem
@@ -75,9 +75,9 @@ func NewDispatcher(configMap map[string]models.IndexConfig, calFactors *calibrat
 		workerLoads[minIndex] += item.Size
 	}
 
-	log.Printf("🚀 [AlphaCore 动态负载均衡点火成功]")
+	log.Printf("🚀 [AlphaCore Dynamic Load Balancer Initialized]")
 	for id, load := range workerLoads {
-		log.Printf("   -> 计算单元 Worker_🔥_%02d : 已承载实时成分股乘加压力 [ %d ] 只", id, load)
+		log.Printf("   -> Processing Unit Worker_🔥_%02d : Carrying [ %d ] stock component calculation load", id, load)
 	}
 
 	return dispatcher
@@ -94,7 +94,7 @@ func (d *Dispatcher) DispatchTicks(batch []models.Tick) {
 		select {
 		case w.TickChan <- batch:
 		default:
-			log.Printf("⚠️ 警告：Worker %d 通道已满，可能发生行情延迟！", w.ID)
+			log.Printf("⚠️ Warning: Worker %d channel is full, market tick processing may be delayed!", w.ID)
 		}
 	}
 }
