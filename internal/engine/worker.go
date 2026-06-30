@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"log"
 	"math"
+	"time"
 
 	"alphacore/internal/models"
 )
@@ -21,18 +23,23 @@ type Worker struct {
 	// 盘前校准比例系数 (ETF代码 -> IOPV缩放比例)
 	// 这个值等于 (早上官方IOPV / 早上我方IOPV)
 	CalibrationRatios map[string]float64
+	// ReadyCache indicates whether all component prices for an ETF have been received
+	ReadyCache map[string]bool
+	StartTime  time.Time
 }
 
 func NewWorker(id int, resultChan chan<- models.IndexResult) *Worker {
 	return &Worker{
-		ID:                id,
-		TickChan:          make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
-		ResultChan:        resultChan,
-		MyIndices:         make(map[string]*models.IndexConfig),
+		ID:                  id,
+		TickChan:            make(chan []models.Tick, 1024), // 缓冲通道，防止阻塞
+		ResultChan:          resultChan,
+		MyIndices:           make(map[string]*models.IndexConfig),
 		StockToIndices:      make(map[string][]string),
 		PriceCache:          make(map[string]int64),
 		CurrentBasketValues: make(map[string]int64),
 		CalibrationRatios:   make(map[string]float64),
+		ReadyCache:          make(map[string]bool),
+		StartTime:           time.Now(),
 	}
 }
 
@@ -68,6 +75,22 @@ func (w *Worker) Start() {
 
 func (w *Worker) calculateAndPublish(etfCode string, timestamp int64) {
 	config := w.MyIndices[etfCode]
+	if !w.ReadyCache[etfCode] {
+		missing := false
+		for stock := range config.Components {
+			if _, ok := w.PriceCache[stock]; !ok {
+				if time.Since(w.StartTime) > 10*time.Second {
+					log.Printf("⚠️ ETF %s waiting for price of component %s", etfCode, stock)
+				}
+				missing = true
+				break
+			}
+		}
+		if missing {
+			return
+		}
+		w.ReadyCache[etfCode] = true
+	}
 	realtimeBasketValue := float64(w.CurrentBasketValues[etfCode]) / 1000.0
 
 	yesterdayTotalValue := config.OriginBasketAmount
